@@ -1,47 +1,51 @@
-# Portfolio Optimisation Under Tail Risk
+# Portfolio Allocation under Alternative Risk Definitions
 
-This repository contains a collection of portfolio optimisation routines developed as a personal research project exploring how classical mean–variance allocation changes once tail-risk constraints are imposed.
+This repository studies how the “optimal” portfolio allocation changes when we change the way risk is defined and constrained.
 
-The project compares several portfolio construction approaches using rolling historical windows:
+Instead of treating portfolio construction as a single optimization problem, the project compares multiple allocation paradigms that reflect how risk is handled in practice (variance-based vs tail-risk-based), under realistic constraints and implementation frictions.
 
-- Classical minimum-variance portfolio  
-- Target-return and target-volatility optimisation  
-- Risk parity allocation  
-- Utility-based optimisation  
-- CVaR-based optimisation (including CVaR-max-return and CVaR-target-return formulations)
-
-The primary motivation is to examine how downside-risk constraints reshape portfolio structure relative to standard Markowitz optimisation.
+All strategies are evaluated in a rolling, out-of-sample backtest framework using monthly data.
 
 ---
 
-## Structure
+## Research Question
 
-`src/` contains modular optimisation routines implemented in Python.
+In applied asset management, “optimal allocation” depends on the chosen risk metric and the way risk budgets are imposed.
 
-`results/examples/` contains selected output files illustrating the behaviour of each optimisation method.
+This project asks:
 
----
-
-## Methods
-
-The project implements rolling-window backtests of multiple portfolio construction techniques, including:
-
-- Mean–variance optimisation  
-- Risk parity  
-- Sharpe-ratio maximisation  
-- CVaR-constrained optimisation
-
-Each method outputs portfolio weights and performance metrics, enabling direct comparison across frameworks.
+- How different are allocations when risk is measured by variance (Sharpe / utility / volatility targeting) versus tail risk (CVaR)?
+- How stable are the resulting portfolios through time under rolling estimation?
+- What is the cost of implementation once turnover and transaction costs are considered?
 
 ---
 
-## Motivation
+## Implemented Strategies
 
-Classical portfolio theory focuses on variance as the sole risk measure.  
-This project explores how portfolio choice changes once downside structure is taken seriously, and whether traditional notions of optimality remain stable under tail-risk constraints.
+| Runner | Allocation rule | Risk definition / control |
+|-------|------------------|---------------------------|
+| run_rolling_markowitz.py | Max excess Sharpe | Variance-based (mean–variance) |
+| run_target_vol.py | Max expected return subject to target volatility | Variance-based risk budget |
+| run_utility.py | Max mean–variance utility (risk aversion λ) | Variance-based risk preference |
+| run_cvar_max_return.py | Max expected return subject to CVaR(α) cap | Tail-risk constraint (CVaR) |
+
+Each strategy uses the same evaluation protocol:
+
+- Monthly rebalancing
+- Rolling estimation window (train) and next-month evaluation (test)
+- Strict allocation bounds
+- Optional transaction-cost model based on turnover
+- Identical data and reporting, enabling apples-to-apples comparison
 
 ---
 
-## Status
+## Tail-Risk Calibration
 
-This repository reflects an exploratory research project and is under continuous refinement.
+The CVaR cap is calibrated to an interpretable benchmark: the historical monthly CVaR(90%) of a classical 60/40 portfolio over the available sample.
+
+This avoids arbitrary tail-risk budgets and makes the CVaR-constrained strategy comparable to a standard allocation baseline.
+
+---
+
+## Repository Structure
+
