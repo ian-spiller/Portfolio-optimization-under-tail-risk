@@ -49,3 +49,51 @@ This avoids arbitrary tail-risk budgets and makes the CVaR-constrained strategy 
 
 ## Repository Structure
 
+src/
+  data.py        # data download & preprocessing
+  optimizers.py  # portfolio construction engines
+  backtest.py    # rolling out-of-sample evaluation
+  reporting.py   # metrics & Excel export
+
+run_*.py         # experiment runners  
+results/         # generated outputs (not tracked in git)
+
+---
+
+## Outputs and Metrics
+
+Each run exports an Excel workbook to `results/` containing:
+
+- portfolio weights over time  
+- out-of-sample returns (gross and net, if transaction costs enabled)  
+- annualized return, volatility, Sharpe ratio  
+- maximum drawdown  
+- tail risk metrics (VaR, CVaR)  
+- optimizer diagnostics (success / fallbacks)
+
+---
+
+## Usage
+
+pip install -r requirements.txt
+
+python run_rolling_markowitz.py  
+python run_target_vol.py  
+python run_utility.py  
+python run_cvar_max_return.py
+
+
+---
+
+## Motivation
+
+Most academic portfolio studies evaluate strategies under stylized assumptions.
+This project focuses on practical portfolio construction under:
+
+- alternative risk definitions (variance vs tail risk)
+- realistic constraints
+- rolling estimation error
+- turnover and implementation costs
+
+The goal is a clean, comparable framework for understanding how risk measurement choices shape allocation decisions.
+
