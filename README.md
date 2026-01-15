@@ -97,3 +97,9 @@ This project focuses on practical portfolio construction under:
 
 The goal is a clean, comparable framework for understanding how risk measurement choices shape allocation decisions.
 
+## Example Output
+
+![CVaR vs Sharpe](figures/equity_curve_cvar_vs_sharpe.png)
+
+Rolling out-of-sample equity curve comparing a CVaR-constrained portfolio
+with a classical Sharpe-optimised benchmark.
