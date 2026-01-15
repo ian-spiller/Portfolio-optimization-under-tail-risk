@@ -32,7 +32,7 @@ TICKERS = {
 
 START = "2005-01-01"
 END = None
-LOOKBACK_MONTHS = 120
+LOOKBACK_MONTHS = 60
 MIN_COVERAGE = 1.0
 
 # -----------------------------
