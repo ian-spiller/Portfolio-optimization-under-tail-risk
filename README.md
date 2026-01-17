@@ -1,105 +1,148 @@
-# Portfolio Allocation under Alternative Risk Definitions
-
-This repository studies how the “optimal” portfolio allocation changes when we change the way risk is defined and constrained.
-
-Instead of treating portfolio construction as a single optimization problem, the project compares multiple allocation paradigms that reflect how risk is handled in practice (variance-based vs tail-risk-based), under realistic constraints and implementation frictions.
-
-All strategies are evaluated in a rolling, out-of-sample backtest framework using monthly data.
+# Dynamic Portfolio Construction under Tail Risk
+## Regime-Conditional Factor Risk & Scenario Simulation
 
 ---
 
-## Research Question
+## Overview
 
-In applied asset management, “optimal allocation” depends on the chosen risk metric and the way risk budgets are imposed.
+This project implements an end-to-end portfolio construction and risk analysis framework that explicitly separates **allocation decisions** from **risk evaluation**.
 
-This project asks:
-
-- How different are allocations when risk is measured by variance (Sharpe / utility / volatility targeting) versus tail risk (CVaR)?
-- How stable are the resulting portfolios through time under rolling estimation?
-- What is the cost of implementation once turnover and transaction costs are considered?
+The objective is not return forecasting, but **understanding how portfolio risk behaves under stress, tail events, and changing market regimes**.
 
 ---
 
-## Implemented Strategies
+## Core Idea
 
-| Runner | Allocation rule | Risk definition / control |
-|-------|------------------|---------------------------|
-| run_rolling_markowitz.py | Max excess Sharpe | Variance-based (mean–variance) |
-| run_target_vol.py | Max expected return subject to target volatility | Variance-based risk budget |
-| run_utility.py | Max mean–variance utility (risk aversion λ) | Variance-based risk preference |
-| run_cvar_max_return.py | Max expected return subject to CVaR(α) cap | Tail-risk constraint (CVaR) |
+Portfolio optimization determines an allocation; it does not fully describe the risks of that allocation.
 
-Each strategy uses the same evaluation protocol:
+This project treats optimization and risk analysis as complementary but distinct steps.  
+Portfolios are built using standard rolling optimizers and then examined through factor-based simulations, regime-conditioned covariance, and explicit tail-risk decomposition.
 
-- Monthly rebalancing
-- Rolling estimation window (train) and next-month evaluation (test)
-- Strict allocation bounds
-- Optional transaction-cost model based on turnover
-- Identical data and reporting, enabling apples-to-apples comparison
 
----
+Specifically, the project:
 
-## Tail-Risk Calibration
+1. Constructs portfolios using classical rolling optimizers under realistic constraints  
+2. Estimates time-varying macro factor exposures of the realized portfolio  
+3. Simulates forward portfolio risk using fat-tailed factor distributions  
+4. Conditions factor covariance on market regimes to reflect state-dependent risk
 
-The CVaR cap is calibrated to an interpretable benchmark: the historical monthly CVaR(90%) of a classical 60/40 portfolio over the available sample.
-
-This avoids arbitrary tail-risk budgets and makes the CVaR-constrained strategy comparable to a standard allocation baseline.
-
----
-
-## Repository Structure
-
-src/
-  data.py        # data download & preprocessing
-  optimizers.py  # portfolio construction engines
-  backtest.py    # rolling out-of-sample evaluation
-  reporting.py   # metrics & Excel export
-
-run_*.py         # experiment runners  
-results/         # generated outputs (not tracked in git)
-
----
-
-## Outputs and Metrics
-
-Each run exports an Excel workbook to `results/` containing:
-
-- portfolio weights over time  
-- out-of-sample returns (gross and net, if transaction costs enabled)  
-- annualized return, volatility, Sharpe ratio  
-- maximum drawdown  
-- tail risk metrics (VaR, CVaR)  
-- optimizer diagnostics (success / fallbacks)
-
----
-
-## Usage
-
-pip install -r requirements.txt
-
-python run_rolling_markowitz.py  
-python run_target_vol.py  
-python run_utility.py  
-python run_cvar_max_return.py
+This structure preserves the strengths of traditional portfolio construction, while providing a more informative and economically interpretable view of tail risk and stress behavior.
 
 
 ---
 
-## Motivation
+## Implemented Components
 
-Most academic portfolio studies evaluate strategies under stylized assumptions.
-This project focuses on practical portfolio construction under:
+### 1. Rolling Portfolio Optimizers
 
-- alternative risk definitions (variance vs tail risk)
-- realistic constraints
-- rolling estimation error
-- turnover and implementation costs
+All optimizations are performed on a rolling monthly basis with realistic constraints and optional transaction costs.
 
-The goal is a clean, comparable framework for understanding how risk measurement choices shape allocation decisions.
+Implemented optimizers:
+- Maximum Sharpe Ratio (excess returns)
+- Target Volatility
+- Mean–Variance Utility
+- CVaR-constrained return maximization
 
-## Example Output
+---
 
-![CVaR vs Sharpe](figures/equity_curve_cvar_vs_sharpe.png)
+### 2. Factor Model
 
-Rolling out-of-sample equity curve comparing a CVaR-constrained portfolio
-with a classical Sharpe-optimised benchmark.
+Portfolio returns are explained using macro factor proxies constructed from liquid ETFs:
+
+- Risk-on / Risk-off
+- Rates
+- Credit
+- Inflation
+- USD
+
+Rolling OLS regressions estimate **time-varying factor betas**, which serve as inputs for scenario simulation and tail-risk attribution.
+
+---
+
+### 3. Scenario Simulation
+
+Forward one-month factor returns are simulated using:
+
+- Multivariate Gaussian distribution
+- Multivariate Student-t distribution (fat tails)
+
+Portfolio returns are generated via a linear factor mapping:
+
+\[
+r_p = \beta^\top f
+\]
+
+Betas are taken **as-of the evaluation date** to avoid look-ahead bias.
+
+---
+
+### 4. Regime-Conditional Covariance
+
+Covariance matrices are estimated conditionally on volatility regimes:
+
+- Regimes are classified using rolling volatility of a chosen factor
+- Separate covariance matrices are estimated for:
+  - Low-volatility regime
+  - High-volatility regime
+- Simulations use the covariance corresponding to the **current regime**, with automatic fallback to unconditional estimates if data is insufficient
+
+This captures the empirical behavior that correlations tend to increase during stress periods.
+
+---
+
+### 5. Tail Risk Decomposition
+
+For simulated portfolio returns, the framework computes:
+
+- Value-at-Risk (VaR) and Conditional VaR (CVaR)
+- Probabilities of large losses
+- Factor-level contributions to tail outcomes
+
+This allows direct attribution of extreme losses to underlying macro risk drivers.
+
+---
+
+## Outputs
+
+Each runner exports a structured Excel workbook containing:
+
+- Rolling portfolio weights
+- Out-of-sample portfolio returns
+- Transaction cost diagnostics
+- Factor regression results
+- Rolling factor betas
+- Scenario simulation summaries
+- Tail-risk decomposition tables
+- Regime diagnostics (covariance source, observation counts)
+
+The output is designed to be transparent, auditable, and presentation-ready.
+
+---
+
+## Design Philosophy
+
+- Portfolio optimization and risk evaluation are treated as **separate problems**
+- All modeling assumptions are explicit
+- No return forecasting or hidden alpha signals
+- Modular design allows straightforward extensions
+
+---
+
+## Possible Extensions
+
+The framework is intentionally modular and can be extended to:
+
+- Multi-period scenario paths
+- Copula-based dependence structures
+- State-dependent expected returns
+- Regime-aware portfolio optimization
+- Futures and options overlays
+
+---
+
+## Disclaimer
+
+This project is for research and educational purposes only.  
+It does not constitute investment advice or a recommendation to trade.
+
+---
