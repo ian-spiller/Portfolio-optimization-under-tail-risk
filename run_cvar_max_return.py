@@ -51,12 +51,12 @@ LOOKBACK_MONTHS = 60
 MIN_COVERAGE = 1.0  # strict
 
 BOUNDS = {
-    "SP500": (0.10, 0.70),
+    "SP500": (0.00, 0.70),
     "UST_7_10Y": (0.00, 0.60),
     "T_BILLS": (0.00, 0.30),
     "CHINA": (0.00, 0.30),
     "REITS": (0.00, 0.30),
-    "GOLD": (0.00, 0.50),
+    "GOLD": (0.00, 0.70),
 }
 DEFAULT_BOUNDS = (0.0, 1.0)
 
@@ -208,7 +208,7 @@ def main() -> None:
                 asof=export_R.index.max(),   # avoid look-ahead
                 beta_pick="asof",
                 sim=SimulationSpec(
-                    method="student_t",
+                    method="gaussian",
                     df=6,
                     n_sims=20_000,
                     lookback_months=60,

@@ -1,0 +1,661 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\graphicspath{{results/figures/}}
+\onehalfspacing
+\setlength{\parskip}{1em}
+\begin{document}
+
+\section*{Executive Summary}
+
+This project develops an end-to-end portfolio construction and risk analysis framework that explicitly separates 
+\textbf{allocation decisions} from \textbf{ex post risk evaluation}. Portfolios are formed using standard, 
+well-established rolling out-of-sample optimization techniques—including Sharpe ratio maximization, target volatility, 
+mean–variance utility, and CVaR-constrained optimization—with transaction costs incorporated to reflect implementable performance.
+
+Rather than embedding risk factors directly into the allocation process, portfolio risk is analyzed 
+\emph{conditional on realized holdings}. A factor-based simulation layer is used to estimate time-varying macro risk exposures 
+via rolling regressions and to stress-test portfolios under correlated shocks drawn from both Gaussian and fat-tailed 
+(multivariate Student-\emph{t}) distributions. The simulation framework further allows the factor covariance structure 
+to vary across market regimes (e.g., low- versus high-volatility environments), capturing state-dependent dependence and tail behavior.
+
+The objective of the analysis is not return forecasting. Instead, the framework is designed to address a central risk-management question:
+\textbf{which macroeconomic risks dominate portfolio losses in extreme market scenarios, and how does portfolio construction influence those exposures?}
+To answer this, the project combines traditional tail risk measures (VaR and CVaR) with a tail-loss decomposition that attributes 
+extreme outcomes to individual macro risk drivers—equity risk, interest rates, credit spreads, inflation shocks, and U.S.\ dollar movements.
+
+Overall, the framework provides a transparent and extensible way to diagnose portfolio vulnerabilities beyond variance-based summaries, 
+highlighting how different optimization objectives shape both the composition of risk and the sources of losses during periods of market stress.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Framework Overview}
+
+The framework is organized into two explicitly separated layers: a \textbf{portfolio construction layer} and a 
+\textbf{risk analysis layer}. This separation is intentional and ensures that allocation decisions are evaluated 
+using realized outcomes rather than ex ante risk assumptions.
+
+
+\subsection{Portfolio Construction Layer}
+
+In the first layer, portfolios are constructed in a rolling out-of-sample setting using monthly asset returns. 
+At each rebalancing date, optimization relies exclusively on information available at that point in time, 
+ensuring a strict separation between estimation and subsequent performance evaluation.
+
+The framework supports several standard and widely used allocation objectives:
+\begin{itemize}
+\item Sharpe ratio maximization,
+\item target-volatility allocation,
+\item mean--variance utility maximization,
+\item maximization of expected return subject to a CVaR constraint.
+\end{itemize}
+
+All strategies operate under explicit asset-level constraints and incorporate transaction costs, 
+ensuring that resulting portfolios are implementable rather than purely theoretical. 
+The output of this layer is a time series of realized portfolio weights and corresponding out-of-sample returns.
+
+\subsection{Factor-Based Risk Representation}
+
+In the second layer, realized portfolio returns are mapped into a macroeconomic factor space. 
+Portfolio-level factor exposures are estimated via rolling regressions of realized returns on a set of 
+macro factors, producing time-varying estimates of factor betas that summarize the portfolio’s systematic risk profile.
+
+Crucially, factor modeling is used solely for risk representation and diagnostics. 
+It does not feed back into the portfolio optimization stage and is not employed for return forecasting.
+
+\subsection{Scenario Simulation}
+
+Conditional on the estimated factor exposures, portfolio risk is analyzed through simulation. 
+Factor return scenarios are generated from multivariate distributions calibrated to historical data, 
+allowing for both Gaussian and fat-tailed dynamics. Cross-factor dependencies are preserved through the 
+estimated covariance structure.
+
+The framework further allows the covariance matrix to vary across market regimes, defined by the volatility 
+state of a selected factor. This enables the analysis of portfolio behavior under regime-dependent dependence 
+structures, such as periods of elevated market stress.
+
+Simulated factor realizations are mapped to portfolio returns using the estimated factor loadings, 
+yielding a distribution of hypothetical portfolio outcomes for a given point in time.
+
+\subsection{Tail Risk Diagnostics}
+
+From the simulated return distribution, tail-focused risk measures are computed, including Value-at-Risk 
+and Conditional Value-at-Risk. Beyond scalar metrics, the framework decomposes extreme portfolio losses into 
+factor-level contributions.
+
+This decomposition identifies which macroeconomic risk drivers dominate portfolio losses in adverse scenarios, 
+providing insight into the sources of tail risk rather than merely its magnitude.
+
+\subsection{Outputs}
+
+For each strategy, the framework produces a consistent set of outputs, including realized performance, 
+tail risk measures, regime-conditioned risk summaries, and factor-level loss decompositions. 
+These outputs are designed to support interpretation and diagnostic analysis, rather than to directly 
+optimize portfolio decisions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Data and Asset Universe}
+
+The analysis is conducted using \textbf{monthly total return data} for a diversified set of liquid exchange-traded funds (ETFs), 
+selected to serve as \textbf{investable proxies} for major asset classes. The use of ETFs ensures that portfolio allocations are fully 
+implementable, transparent, and representative of instruments commonly used in practice.
+
+\subsection{Asset Universe}
+
+The portfolio universe includes the following asset classes and corresponding ETF proxies:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+\textbf{Asset Class} & \textbf{ETF Proxy} \\
+\midrule
+U.S. Equities (Broad Market) & SPY \\
+U.S. Treasury Bonds (7--10Y) & IEF \\
+U.S. Treasury Bills (Cash Proxy) & SHY \\
+Chinese Equities & FXI \\
+U.S. Real Estate (REITs) & VNQ \\
+Gold & GLD \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+These assets are selected to provide meaningful diversification across equity risk, interest-rate risk, real-asset exposure, 
+and defensive characteristics, while remaining sufficiently liquid over the full sample period.
+
+\subsection{Sample Period and Frequency}
+
+\begin{itemize}
+    \item \textbf{Frequency:} Monthly
+    \item \textbf{Sample start:} January 2005
+    \item \textbf{Sample end:} Latest available observation at the time of analysis
+\end{itemize}
+
+Monthly frequency is chosen to balance economic interpretability, robustness of estimation, and relevance for strategic asset allocation decisions.
+
+\subsection{Return Construction}
+
+Returns are computed as \textbf{monthly total returns}, incorporating price changes and distributions where applicable. 
+All series are aligned to a common month-end calendar. Missing observations are handled conservatively, and assets are retained only when sufficient 
+historical coverage is available for rolling estimation windows.
+
+\subsection{Rolling Out-of-Sample Framework}
+
+Portfolio optimization is performed in a \textbf{rolling out-of-sample setting} using a fixed-length estimation window:
+
+\begin{itemize}
+    \item \textbf{Estimation window:} 60 months
+    \item \textbf{Rebalancing frequency:} Monthly
+\end{itemize}
+
+At each rebalancing date, portfolio weights are determined using only information available up to that point in time. 
+This ensures that all reported results reflect realistic, implementable decision rules and avoid look-ahead bias.
+
+\subsection{Factor Data}
+
+In addition to asset returns, a set of \textbf{macro-economic factor return series} is constructed to capture key underlying economic risks, including equity market conditions, interest rate movements, credit spreads, inflation dynamics, and currency fluctuations. 
+These factor returns are used exclusively for \textbf{ex post risk attribution and scenario-based simulation}, and are not employed for return forecasting or portfolio optimization.
+
+All factors are constructed using liquid, exchange-traded funds (ETFs) to ensure transparency, investability, and consistent data availability. 
+Where appropriate, factor returns are defined as spreads between ETFs in order to isolate the intended economic risk while minimizing exposure to unrelated market components.
+
+\paragraph{Equity Market Risk.}
+Equity market risk is proxied by the return spread between the MSCI All Country World Index ETF (ACWI) and short-term U.S.\ Treasury bills (SHY). 
+This construction captures global equity risk relative to a low-risk cash proxy and serves as a broad measure of risk-on versus risk-off conditions in global markets.
+
+\paragraph{Interest Rate (Duration) Risk.}
+Interest rate risk is represented by the return spread between intermediate-term U.S.\ Treasury bonds (IEF) and short-term Treasury bills (SHY). 
+This factor isolates duration risk by capturing changes in the slope of the Treasury yield curve while abstracting from equity and credit risk.
+
+\paragraph{Credit Risk.}
+Credit risk is measured using the return spread between investment-grade corporate bonds (LQD) and intermediate-term U.S.\ Treasuries (IEF). 
+This construction captures variation in corporate credit spreads and credit conditions while controlling for interest rate movements.
+
+\paragraph{Inflation Risk.}
+Inflation risk is proxied by the return spread between U.S.\ Treasury Inflation-Protected Securities (TIP) and nominal Treasuries (IEF). 
+This factor reflects changes in inflation expectations and real-rate dynamics, isolating inflation-related risk from duration effects.
+
+\paragraph{U.S.\ Dollar Risk.}
+U.S.\ dollar exposure is represented by the return on the euro–U.S.\ dollar exchange rate ETF (FXE). 
+This factor captures movements in the U.S.\ dollar relative to a major global currency and serves as a proxy for dollar strength in international asset pricing.
+
+\vspace{0.5em}
+\noindent
+All factor returns are computed at monthly frequency and aligned with portfolio returns for rolling regression-based exposure estimation and simulation analysis.
+
+\subsection{Scope and Extensibility}
+
+The choice of assets, factors, and sample period is intended to be illustrative rather than exhaustive. 
+The framework is fully modular and can be extended to alternative asset universes, higher-frequency data, or different factor definitions 
+without altering the core methodology.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Portfolio Construction Methods}
+
+Portfolio allocation is performed using a set of well-established optimization frameworks commonly employed in academic research and professional asset management. 
+The objective of this stage is \textbf{not} to forecast returns or exploit predictive signals, but to generate economically meaningful portfolios whose 
+risk characteristics can later be analyzed in a consistent and comparable manner.
+
+All portfolio strategies are implemented in a rolling out-of-sample setting, using only information available at the time of each rebalancing date. 
+Optimization is conducted at monthly frequency using a fixed-length estimation window of 60 months.
+
+\subsection{General Setup}
+
+Let $\boldsymbol{r}_t$ denote the vector of asset returns at time $t$, and let $\boldsymbol{w}_t$ denote the portfolio weights chosen at the end of 
+period $t-1$. Portfolio returns are given by:
+\[
+R_{p,t} = \boldsymbol{w}_t^\top \boldsymbol{r}_t
+\]
+
+At each rebalancing date, portfolio weights are determined by solving an optimization problem subject to:
+
+\begin{itemize}
+    \item Full investment: $\sum_i w_i = 1$
+    \item Long-only constraints
+    \item Asset-specific allocation bounds
+\end{itemize}
+
+The same asset universe, constraints, and estimation window are used across all portfolio construction methods to ensure comparability.
+
+\subsection{Maximum Sharpe Ratio Portfolio}
+
+The maximum Sharpe ratio portfolio serves as a benchmark representing classical mean--variance optimal allocation. Portfolio weights are chosen 
+to maximize the expected excess return per unit of volatility:
+\[
+\max_{\boldsymbol{w}} \quad \frac{\mathbb{E}[R_p - R_f]}{\sqrt{\mathrm{Var}(R_p)}}
+\]
+
+Expected returns and the covariance matrix are estimated using historical sample moments over the rolling estimation window. 
+A short-term Treasury ETF is used as a proxy for the risk-free rate.
+
+This strategy reflects standard practice in strategic asset allocation and provides a natural reference point for comparison with alternative risk-based approaches.
+
+\subsection{Target Volatility Portfolio}
+
+The target volatility strategy seeks to construct a portfolio whose ex ante volatility matches a predefined annualized target level. 
+Formally, portfolio weights are chosen to satisfy:
+\[
+\mathrm{Vol}(R_p) \leq \sigma^{\ast}
+\]
+while remaining fully invested and respecting allocation constraints.
+
+This approach decouples the allocation decision from return forecasts and is used in risk-controlled portfolio construction. 
+It provides a useful contrast to unconstrained mean--variance optimization by explicitly anchoring portfolio risk.
+
+\subsection{Mean--Variance Utility Maximization}
+
+The utility-based strategy maximizes a quadratic mean--variance utility function:
+\[
+\max_{\boldsymbol{w}} \quad \mathbb{E}[R_p] - \frac{\lambda}{2} \mathrm{Var}(R_p)
+\]
+
+where $\lambda > 0$ represents the investor’s risk aversion parameter. This formulation nests mean--variance optimization within a 
+preference-based framework and allows for smooth trade-offs between expected return and risk.
+
+The risk aversion parameter is held constant across the sample period to isolate the impact of changing return and covariance estimates.
+
+\subsection{CVaR-Constrained Return Maximization}
+
+To explicitly address downside risk, a Conditional Value-at-Risk (CVaR) constrained strategy is implemented. Portfolio weights are chosen to 
+maximize expected return subject to a constraint on tail risk:
+\[
+\max_{\boldsymbol{w}} \quad \mathbb{E}[R_p]
+\quad \text{s.t.} \quad \mathrm{CVaR}_{\alpha}(R_p) \leq c
+\]
+
+where $\mathrm{CVaR}_{\alpha}$ denotes expected losses beyond the $\alpha$-quantile, and $c$ is a predefined monthly risk limit.
+
+This formulation directly controls extreme downside outcomes and contrasts with variance-based approaches that treat positive and negative deviations symmetrically.
+
+\subsection{Transaction Costs and Turnover}
+
+To assess implementation realism, all strategies are evaluated both before and after transaction costs. Transaction costs are modeled as proportional to 
+portfolio turnover:
+\[
+\text{Cost}_t = \kappa \sum_i |w_{i,t} - w_{i,t-1}|
+\]
+where $\kappa$ represents the cost per unit of traded portfolio weight.
+
+Net-of-cost returns are used for risk analysis whenever transaction costs materially affect portfolio behavior.
+
+\subsection{Role Within the Overall Framework}
+
+Importantly, portfolio construction represents only the first stage of the framework. No factor information, regime classification, or s
+imulation-based assumptions are incorporated into the optimization process itself.
+
+All risk analysis—factor exposure estimation, tail risk simulation, and regime-conditional covariance modeling—is performed \textbf{after} 
+portfolio weights are determined.
+
+\section{Factor Exposure Estimation and Rolling Betas}
+
+To analyze portfolio risk beyond asset-level volatility, portfolio returns are decomposed into exposures to a small set of macroeconomic 
+and market-wide risk factors. This step provides a transparent link between portfolio performance and underlying sources of systematic risk.
+
+Factor exposures are estimated \emph{after} portfolio construction, ensuring that allocation decisions are not influenced by factor modeling assumptions.
+
+\subsection{Factor Model Specification}
+
+Let $R_{p,t}$ denote the realized portfolio return at time $t$. Portfolio returns are modeled using a linear factor structure:
+\[
+R_{p,t} = \alpha + \boldsymbol{\beta}_t^\top \boldsymbol{F}_t + \varepsilon_t
+\]
+where:
+\begin{itemize}
+    \item $\boldsymbol{F}_t$ is a vector of factor returns at time $t$,
+    \item $\boldsymbol{\beta}_t$ represents time-varying factor exposures,
+    \item $\alpha$ captures average unexplained return,
+    \item $\varepsilon_t$ is an idiosyncratic residual.
+\end{itemize}
+
+The factor set is designed to capture broad macro-financial risks rather than asset-specific characteristics.
+
+\subsection{Rolling Estimation of Factor Exposures}
+
+Factor loadings are estimated using rolling ordinary least squares regressions over a fixed-length window of 60 months. 
+At each time $t$, the regression uses information available up to $t-1$:
+\[
+\widehat{\boldsymbol{\beta}}_t
+=
+\arg\min_{\boldsymbol{\beta}}
+\sum_{s=t-60}^{t-1}
+\left(
+R_{p,s} - \alpha - \boldsymbol{\beta}^\top \boldsymbol{F}_s
+\right)^2
+\]
+
+This rolling estimation approach allows factor exposures to evolve gradually over time in response to changes in portfolio composition and market conditions.
+
+\subsection{Motivation for Time-Varying Betas}
+
+Assuming constant factor exposures is often unrealistic for dynamically rebalanced portfolios. Even in the absence of explicit market timing, 
+changes in asset weights and cross-asset correlations can materially alter a portfolio’s effective exposure to macroeconomic risks.
+
+Rolling beta estimation captures:
+\begin{itemize}
+    \item Shifts in risk concentration driven by rebalancing
+    \item Changes in diversification effectiveness across market regimes
+    \item The evolving relationship between portfolio returns and macro factors
+\end{itemize}
+
+This time variation is central to understanding portfolio behavior during periods of market stress, when correlations and risk transmission mechanisms 
+tend to change.
+
+\subsection{Use of Factor Exposures in Risk Analysis}
+
+Estimated rolling betas serve two purposes within the broader framework:
+\begin{enumerate}
+    \item They provide an interpretable decomposition of realized portfolio risk into macroeconomic drivers.
+    \item They form the mapping from simulated factor returns to simulated portfolio returns in the scenario and tail-risk analysis.
+\end{enumerate}
+
+Importantly, factor exposures are treated as \emph{state variables} summarizing the portfolio’s sensitivity to systematic risks at a given point in time, 
+rather than as predictive signals.
+
+\subsection{Alignment with Out-of-Sample Evaluation}
+
+To avoid look-ahead bias, only beta estimates available at the end of the estimation window are used for subsequent risk simulations. 
+Factor realizations and beta estimates are aligned strictly by date, and all scenario analyses are conducted conditional on the most recently estimated exposures.
+This ensures that the risk analysis reflects the information set that would have been available to an investor at the time of evaluation.
+
+\section{Scenario Simulation and Regime-Conditional Risk Analysis}
+
+This section evaluates portfolio risk conditional on realized factor exposures. 
+The objective is not return forecasting, but to analyze how portfolio risk behaves under tail events and changing market environments, 
+given an already constructed portfolio.
+
+Risk analysis is performed \emph{after} portfolio construction, ensuring a clear separation between allocation decisions and risk diagnostics.
+
+\subsection{Factor Return Simulation}
+
+Portfolio risk is analyzed through simulations conducted in factor space. 
+Let $\mathbf{F}_t \in \mathbb{R}^K$ denote the vector of factor returns at time $t$. 
+Future factor realizations are simulated from a multivariate distribution calibrated to historical factor data.
+
+Two distributional assumptions are considered:
+\begin{itemize}
+    \item A multivariate Gaussian distribution, serving as a benchmark.
+    \item A multivariate Student-$t$ distribution, allowing for excess kurtosis and fat tails.
+\end{itemize}
+
+In both cases, the covariance structure of factor returns is preserved. 
+Expected returns are set to zero, such that simulations focus exclusively on risk rather than return predictability.
+
+\subsection{Mapping Factor Shocks to Portfolio Returns}
+
+Simulated factor returns are mapped into portfolio returns using estimated factor exposures.
+Let $\boldsymbol{\beta} \in \mathbb{R}^K$ denote the vector of rolling factor loadings associated with the realized portfolio. 
+Simulated portfolio returns are then given by:
+\begin{equation}
+    R_p = \boldsymbol{\beta}^\top \mathbf{F}.
+\end{equation}
+
+This approach avoids resampling realized portfolio returns or asset-level returns.
+All risk dynamics originate from factor shocks and their interaction with the portfolio’s exposure profile.
+
+\subsection{Tail Risk Metrics}
+
+Tail risk is evaluated using Value-at-Risk (VaR) and Conditional Value-at-Risk (CVaR), computed on the distribution of simulated portfolio returns.
+Losses are defined as negative returns, and tail metrics are calculated over the worst $\alpha\%$ of outcomes.
+
+In addition to standard tail statistics, the probability of exceeding fixed loss thresholds is reported to provide intuitive benchmarks for downside risk.
+
+\subsection{Tail Risk Decomposition}
+
+To understand the drivers of extreme portfolio losses, tail outcomes are decomposed into factor-level contributions.
+For a given simulated draw, the contribution of factor $k$ is defined as:
+\begin{equation}
+    C_k = \beta_k F_k.
+\end{equation}
+
+Conditioning on the worst $\alpha\%$ of portfolio outcomes, summary statistics of factor contributions are computed.
+This decomposition reveals which factors dominate portfolio losses in extreme scenarios and how their importance varies across environments.
+
+\subsection{Regime-Conditional Covariance Estimation}
+
+Factor return covariances are allowed to vary across market regimes.
+Regimes are identified using rolling volatility of a selected factor, which serves as a proxy for overall market stress.
+
+Observations are classified into low- and high-volatility regimes based on quantile thresholds.
+Covariance matrices are estimated separately within each regime, subject to a minimum observation requirement.
+If insufficient observations are available, the procedure falls back to the unconditional covariance.
+
+Importantly, regimes affect only second moments.
+Expected returns are not adjusted, and no regime forecasting is performed.
+Simulations are conditioned on the covariance structure corresponding to the prevailing volatility regime at the evaluation date.
+
+\subsection{Deterministic Stress Scenarios}
+
+In addition to probabilistic simulations, a small set of deterministic stress scenarios is evaluated.
+These scenarios represent economically interpretable factor shocks and serve as diagnostic tools rather than probabilistic forecasts.
+
+Stress scenarios complement the simulation-based analysis by providing transparent, scenario-specific insights into portfolio vulnerabilities.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Results}
+
+This section presents the empirical results of the portfolio construction and risk analysis framework. 
+We first analyze realized out-of-sample performance and then examine how portfolio composition and risk exposures differ across optimization objectives.
+
+\subsection{Out-of-Sample Performance}
+
+Figure~\ref{fig:oos_performance} reports the cumulative out-of-sample performance of the rolling Max-Sharpe and CVaR-constrained portfolios based on realized 
+monthly returns.
+
+Both strategies exhibit sustained long-run growth and broadly similar performance over the full sample. 
+Major drawdowns and recoveries are closely aligned, indicating that both portfolios are primarily driven by common macroeconomic forces. 
+However, important differences emerge around major market stress episodes.
+
+During the COVID-19 crash in 2020, the CVaR-constrained portfolio experiences a substantially larger drawdown than the Max-Sharpe portfolio. 
+This outcome may appear counterintuitive given the explicit tail-risk constraint imposed on the CVaR strategy. 
+The explanation lies in the nature of the constraint: the CVaR optimizer maximizes expected return subject to a cap on \emph{ex-ante} estimated CVaR, rather 
+than minimizing realized losses during an unprecedented shock. 
+Given the rolling estimation window and the limited presence of comparable historical tail events prior to 2020, the CVaR constraint does not fully anticipate 
+the magnitude of the COVID shock.
+
+Following the crash, however, the CVaR portfolio recovers substantially faster and outperforms the Max-Sharpe strategy until early 2022. 
+This stronger rebound coincides with a shift toward assets that performed well in the post-crisis environment, most notably equities and gold. 
+From 2022 onward, both portfolios experience similar losses during the inflation surge and rapid interest-rate tightening, and their performance converges again 
+in the subsequent recovery phase.
+
+To better understand these dynamics, we next examine the evolution of portfolio weights over time.
+
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling out-of-sample cumulative performance based on realized monthly returns.}
+\includegraphics[width=0.9\textwidth]{figure1_oos_performance.pdf}
+\label{fig:oos_performance}
+\end{figure}
+
+\subsection{Portfolio Composition: Max-Sharpe vs.\ CVaR}
+
+Figures~\ref{fig:weights_markowitz} and~\ref{fig:weights_cvar} show the time evolution of portfolio weights for the Max-Sharpe and CVaR-constrained strategies, 
+respectively.
+
+Both portfolios exhibit substantial time variation in asset allocations, reflecting changing return and risk estimates in the rolling optimization framework. 
+However, the composition of the two portfolios differs markedly.
+
+The Max-Sharpe portfolio displays a consistently stronger allocation to U.S.\ Treasury bonds, particularly between 2014 and 2022. 
+During this period, the allocation to intermediate-term Treasuries reaches up to 60\%, reflecting their historically favorable Sharpe ratio in a 
+low-rate, low-volatility environment. 
+In contrast, the CVaR-constrained portfolio maintains a much higher exposure to SP 500, frequently reaching the imposed upper bound of 70\%.
+
+Once the SP500 allocation constraint becomes binding, the CVaR optimizer reallocates capital to assets with return profiles similar to SP500, 
+most notably REITs and the China equity market. 
+This behavior follows mechanically from the optimization problem: after the SP500 cap is reached, the optimizer selects the remaining assets 
+that offer the highest expected returns while satisfying the CVaR constraint.
+
+From 2020 onward, the CVaR portfolio exhibits a pronounced increase in gold exposure, exceeding 30\% shortly after the COVID crash and rising to nearly 60\% by 2023. 
+The Max-Sharpe portfolio, by contrast, shifts from bonds to gold primarily during the 2022 rate-hike cycle, reaching allocations of around 50\% only 
+after bond performance deteriorates. 
+The earlier and stronger allocation to gold in the CVaR strategy largely explains its superior post-COVID recovery.
+
+Both strategies display extremely conservative allocations in the aftermath of the 2008 financial crisis, with virtually no equity exposure until approximately 2013–2014. 
+This result is driven by the five-year rolling estimation window, which continues to incorporate large crisis losses until they exit the sample. 
+Once these observations roll off, both optimizers rapidly increase equity exposure, leading to a sharp reallocation around 2013. 
+The Max-Sharpe portfolio begins this transition slightly earlier, which helps explain its stronger relative performance in the 2013–2014 period.
+
+From an implementation perspective, the magnitude of allocation shifts is noteworthy.
+Both strategies exhibit large and occasionally abrupt changes in portfolio weights, reflecting the sensitivity of rolling optimizers to changes in estimated return 
+and risk inputs.
+This behavior suggests that static or infrequently rebalanced allocations may be suboptimal in environments characterized by rapidly evolving risk–return conditions.
+
+At the same time, the observed instability highlights a limitation of using equally weighted historical observations within a fixed rolling window.
+Alternative estimation approaches that place greater weight on more recent returns—such as exponentially weighted schemes or regime-aware estimators—could 
+potentially reduce the severity of allocation jumps while preserving responsiveness to changing market conditions.
+Exploring such smoothing mechanisms represents a natural extension for improving the practical implementability of the framework.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling portfolio weights - Max-Sharpe optimization.}
+\includegraphics[width=0.9\textwidth]{figure_weights_rolling_markowitz_results1.pdf}
+\label{fig:weights_markowitz}
+\end{figure}
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling portfolio weights - CVaR-constrained optimization.}
+\includegraphics[width=0.9\textwidth]{figure_weights_cvar_max_return_results1.pdf}
+\label{fig:weights_cvar}
+\end{figure}
+
+\subsection{Risk Exposure}
+
+We now examine the risk-factor exposures of both portfolios using the macro factor model.
+
+Overall, estimated factor exposures closely mirror the portfolio allocation patterns discussed in the previous section. 
+Differences between the Max-Sharpe and CVaR portfolios arise primarily from their distinct responses to changing risk–return conditions 
+under rolling estimation and binding constraints.
+
+\paragraph{Equity risk.}
+Equity exposure is consistently higher for the CVaR portfolio between 2014 and 2022, reflecting its systematically larger allocation to the S\&P~500. 
+Both portfolios exhibit positive equity betas throughout the sample, confirming that equity risk remains the dominant source of systematic risk for both strategies.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling betas - Equity Market Risk.}
+\includegraphics[width=0.9\textwidth]{figure_rolling_betas_risk_on.pdf}
+\label{fig:betas_equity}
+\end{figure}
+
+\paragraph{Duration risk.}
+Duration exposure exhibits a clearer contrast across strategies, although both portfolios maintain positive duration exposure throughout the sample. 
+Between 2015 and 2019, the CVaR portfolio displays higher duration exposure. Thereafter, its duration beta converges toward that of the Max-Sharpe 
+portfolio and declines sharply from 2022 onward. 
+By contrast, the Max-Sharpe portfolio maintains persistently higher duration exposure in the later part of the sample.
+
+At first glance, the lower duration exposure of the CVaR portfolio in recent years may appear counterintuitive, given that both portfolios maintain allocations 
+to U.S.\ equities and gold. 
+However, factor regressions reported for 2026 are estimated over the 2021–2026 window. During this period, the Max-Sharpe strategy allocated more 
+than 50\% of capital to U.S.\ Treasuries in 2021 and 2022, whereas the CVaR portfolio held no Treasury exposure. 
+Consequently, the estimated duration beta is mechanically higher for the Max-Sharpe portfolio.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling betas - Interest rate risk.}
+\includegraphics[width=0.9\textwidth]{figure_rolling_betas_rates.pdf}
+\label{fig:betas_rates}
+\end{figure}
+
+\paragraph{U.S.\ dollar risk.}
+Exposure to the U.S.\ dollar factor is positive for both portfolios until approximately 2022 and is higher for the CVaR portfolio during this period. 
+From 2022 onward, dollar exposure turns negative for both strategies, with the CVaR portfolio exhibiting a more pronounced decline.
+
+This sign reversal reflects a regime shift in the relationship between the U.S.\ dollar and global risk assets. 
+During the pre-2022 period, dollar appreciation coincided with favorable global growth conditions and accommodative financial markets, 
+generating positive dollar exposure through equity and international asset holdings. 
+Following the onset of aggressive monetary tightening and heightened global risk aversion, the dollar increasingly acted as a safe-haven asset. 
+As a result, portfolios with greater exposure to risk assets—particularly equities and gold—exhibited negative dollar betas, 
+while the sustained Treasury exposure in the Max-Sharpe portfolio partially offset this effect.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling betas - USD.}
+\includegraphics[width=0.9\textwidth]{figure_rolling_betas_usd.pdf}
+\label{fig:betas_usd}
+\end{figure}
+
+\paragraph{Inflation risk.}
+ 
+Between 2018 and 2021, both portfolios exhibit negative inflation exposure, consistent with a prolonged low-inflation environment. 
+From 2021 onward, inflation exposure becomes strongly positive for the CVaR portfolio, reflecting its substantial allocation to gold, 
+which serves as an effective inflation hedge in the sample. 
+The Max-Sharpe portfolio exhibits a weaker and more delayed increase in inflation exposure.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling betas - Inflation Risk.}
+\includegraphics[width=0.9\textwidth]{figure_rolling_betas_inflation.pdf}
+\label{fig:betas_inflation}
+\end{figure}
+
+\paragraph{Credit risk.}
+Credit-factor exposure differs markedly across strategies. 
+The Max-Sharpe portfolio maintains a consistently negative exposure to credit risk throughout the sample. In contrast, 
+the CVaR portfolio exhibits positive credit exposure in several periods 
+and substantially higher volatility in its credit beta. 
+This instability reflects the greater variability in portfolio composition induced by the binding CVaR constraint and its tendency to 
+reallocate capital toward higher-return assets when tail-risk limits permit.
+
+\begin{figure}[h!]
+\centering
+\textbf{Rolling betas - Credit Risk.}
+\includegraphics[width=0.9\textwidth]{figure_rolling_betas_credit.pdf}
+\label{fig:betas_credit}
+\end{figure}
+
+\paragraph{Summary}
+Across all factors, risk exposures are markedly more time-varying for the CVaR strategy, whereas the Max-Sharpe portfolio exhibits 
+comparatively smoother and more stable risk profiles. This contrast highlights a fundamental trade-off between adaptability and stability: 
+tail-risk constraints induce dynamic reallocations and shifting factor exposures, while variance-based optimization produces more persistent risk 
+characteristics that are slower to adjust across regimes.
+
+\subsection{Simulation-Based Risk Analysis}
+
+Figure~\ref{fig:simulation} presents the full distribution of simulated portfolio returns under Student-$t$ distributional assumptions. 
+The simulation is based on a conditional covariance matrix, where regimes are defined by the volatility of the equity factor. 
+The most recent regime is classified as low volatility, and the corresponding covariance matrix is used for the baseline simulation.
+
+\begin{figure}[h!]
+\centering
+\textbf{Simulated distributions of portfolio returns.}
+\includegraphics[width=0.9\textwidth]{figure2_simulated_distributions.pdf}
+\label{fig:simulation}
+\end{figure}
+
+Simulation results for the two portfolios are very similar, reflecting the convergence of portfolio allocations in recent years. 
+Repeating the simulation under a high-volatility regime yields comparable results, suggesting that recent covariance structures are relatively stable across regimes. 
+This stability likely reflects the strong and broadly correlated performance of most asset classes in the most recent sample period.
+
+The most pronounced differences in simulated risk measures arise from the assumed return distribution. 
+When returns are modeled using a Gaussian distribution instead of a Student-$t$ distribution, both portfolios exhibit substantially lower tail-risk measures. 
+This result is expected, as the Student-$t$ distribution explicitly captures fat tails and extreme outcomes.
+
+Figure~\ref{fig:tail_decomposition} decomposes extreme portfolio losses into factor contributions. 
+In both portfolios, equity risk is the dominant driver of tail losses, consistent with equities being the riskiest asset class in the investment universe. 
+For the CVaR portfolio, the dollar factor represents the second-largest contributor, whereas rate risk plays a larger role in the Max-Sharpe portfolio. 
+This difference again reflects the historically higher Treasury allocations in the Max-Sharpe strategy.
+
+\begin{figure}[h!]
+\centering
+\textbf{Tail decomposition of portfolio losses.}
+\includegraphics[width=0.9\textwidth]{figure3_tail_decomposition.pdf}
+\label{fig:tail_decomposition}
+\end{figure}
+
+Credit-spread and inflation-surprise factors contribute negatively to tail losses in both portfolios. 
+This outcome is consistent with the portfolios’ substantial exposure to gold, which tends to perform well during inflationary periods and 
+episodes of economic stress associated with widening credit spreads.
+
+\section{Conclusion}
+
+This project demonstrates that meaningful insights into portfolio risk can be obtained by separating allocation decisions from risk evaluation.
+By combining standard portfolio construction techniques with factor-based simulation and regime-conditional risk analysis, the framework provides a 
+flexible and interpretable approach to understanding portfolio vulnerabilities under extreme conditions.
+
+\end{document}

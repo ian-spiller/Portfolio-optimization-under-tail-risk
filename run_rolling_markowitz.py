@@ -33,7 +33,7 @@ TICKERS = {
     "T_BILLS": "SHY",     # used as rf proxy
     "CHINA": "FXI",
     "REITS": "VNQ",
-    "GOLD": "GC=F",
+    "GOLD": "GLD",
 }
 
 START = "2005-01-01"
@@ -45,11 +45,11 @@ MIN_COVERAGE = 1.0  # 1.0 strict
 # 2) BOUNDS
 # -----------------------------
 BOUNDS = {
-    "SP500":     (0.10, 0.70),
+    "SP500":     (0.00, 0.70),
     "UST_7_10Y": (0.00, 0.60),
     "CHINA":     (0.00, 0.30),
     "REITS":     (0.00, 0.30),
-    "GOLD":      (0.00, 0.30),
+    "GOLD":      (0.00, 0.70),
     # Note: do NOT set bounds for T_BILLS here because it is used as rf, not optimized as an asset.
 }
 
@@ -134,7 +134,7 @@ def main():
             asof=export_R_aligned.index.max(),  # avoid look-ahead
             beta_pick="asof",
             sim=SimulationSpec(
-                method="student_t",
+                method="gaussian",
                 df=6,
                 n_sims=20_000,
                 lookback_months=60,
